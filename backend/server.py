@@ -160,15 +160,33 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise credentials_exception
     return User(**user)
 
+def calculate_bid_index_priority(bids: List[Dict]) -> List[Dict]:
+    """
+    Calculate priority percentages based on bid price ordering:
+    1. Sort bids by price (ascending)
+    2. Assign index (1 to N)
+    3. Calculate priority% = (index * 100) / N
+    """
+    # Sort bids by amount (price) ascending
+    sorted_bids = sorted(bids, key=lambda x: x['amount'])
+    total_bids = len(sorted_bids)
+    
+    # Calculate priority for each bid
+    for index, bid in enumerate(sorted_bids, start=1):
+        bid['index'] = index
+        bid['priority_score'] = (index * 100.0) / total_bids
+    
+    return sorted_bids
+
 def calculate_priority_score(bid_amount: float, starting_price: float, bidder_rating: float, 
                             bid_time: datetime, auction_start: datetime) -> float:
     """
     OS Scheduling Priority Calculation:
-    Simple Amount-based Priority: The bid amount itself is the priority score.
-    Higher bids win, making OS-scheduled auctions behave like traditional ones.
+    Note: This is a placeholder score. The actual priority is calculated
+    after collecting all bids using calculate_bid_index_priority().
     """
-    # Return the raw bid amount as the priority score
-    return bid_amount
+    # Return a temporary score; will be updated by batch processing
+    return 0.0
 
 # Auth Routes
 @api_router.post("/auth/register", response_model=Token)
@@ -340,21 +358,39 @@ async def place_bid(bid_data: BidCreate, current_user: User = Depends(get_curren
             auction_obj.winner_id = current_user.id
             auction_obj.winner_name = current_user.name
     else:
-        # OS Scheduled: highest priority wins
+        # OS Scheduled: index-based priority calculation
         all_bids = await db.bids.find({"auction_id": bid_data.auction_id}, {"_id": 0}).to_list(1000)
         if all_bids:
-            highest_priority_bid = max(all_bids, key=lambda x: x.get('priority_score', 0))
+            # Calculate priorities for all bids
+            prioritized_bids = calculate_bid_index_priority(all_bids)
+            
+            # Update priorities in database
+            for updated_bid in prioritized_bids:
+                await db.bids.update_one(
+                    {"id": updated_bid["id"]},
+                    {"$set": {
+                        "priority_score": updated_bid["priority_score"],
+                        "index": updated_bid["index"]
+                    }}
+                )
+            
+            # Highest index (N) has 100% priority and wins
+            winning_bid = prioritized_bids[-1]
             await db.auctions.update_one(
                 {"id": bid_data.auction_id},
                 {"$set": {
-                    "current_price": highest_priority_bid['amount'],
-                    "winner_id": highest_priority_bid['bidder_id'],
-                    "winner_name": highest_priority_bid['bidder_name']
+                    "current_price": winning_bid["amount"],
+                    "winner_id": winning_bid["bidder_id"],
+                    "winner_name": winning_bid["bidder_name"]
                 }}
             )
-            auction_obj.current_price = highest_priority_bid['amount']
-            auction_obj.winner_id = highest_priority_bid['bidder_id']
-            auction_obj.winner_name = highest_priority_bid['bidder_name']
+            auction_obj.current_price = winning_bid["amount"]
+            auction_obj.winner_id = winning_bid["bidder_id"]
+            auction_obj.winner_name = winning_bid["bidder_name"]
+            
+            # Update the current bid's priority score from the calculation
+            current_bid = next(b for b in prioritized_bids if b["id"] == bid.id)
+            bid.priority_score = current_bid["priority_score"]
     
     # Broadcast update via WebSocket
     await manager.broadcast(bid_data.auction_id, {

@@ -273,7 +273,7 @@ function AuctionDetail() {
                     <p className="text-green-400 font-bold">${bid.amount}</p>
                     {bid.priority_score && (
                       <p className="text-purple-400 text-sm">
-                        Priority: {bid.priority_score}
+                        Priority: {bid.priority_score}%
                       </p>
                     )}
                   </div>
