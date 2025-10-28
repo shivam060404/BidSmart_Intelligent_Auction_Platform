@@ -69,7 +69,7 @@ This creates a fairer, more dynamic bidding environment that rewards early parti
 The OS-Scheduled auction type treats each bid as a \"process\" with a calculated priority score:
 
 
-Priority Score = (Urgency × 0.4) + (Rating × 0.3) + (Amount × 0.3)
+Priority Score = Amount
 
 
 #### Components:
@@ -141,9 +141,7 @@ Alice wins despite Bob's higher bid due to superior timing and rating!
 ### Database
 - *MongoDB* - NoSQL document database
 
-### DevOps
-- *Supervisor* - Process management
-- *Yarn* - Package management
+
 
 ---
 

@@ -164,24 +164,11 @@ def calculate_priority_score(bid_amount: float, starting_price: float, bidder_ra
                             bid_time: datetime, auction_start: datetime) -> float:
     """
     OS Scheduling Priority Calculation:
-    - Bid urgency (how early the bid was placed) - 40%
-    - Bidder rating - 30%
-    - Bid amount relative to starting price - 30%
+    Simple Amount-based Priority: The bid amount itself is the priority score.
+    Higher bids win, making OS-scheduled auctions behave like traditional ones.
     """
-    # Normalize bid amount (0-100)
-    amount_score = min((bid_amount / starting_price) * 100, 100) if starting_price > 0 else 50
-    
-    # Normalize rating (0-100)
-    rating_score = (bidder_rating / 5.0) * 100
-    
-    # Calculate urgency score based on bid time (earlier = higher score)
-    time_diff = (bid_time - auction_start).total_seconds()
-    # Invert time - earlier bids get higher scores
-    urgency_score = max(0, 100 - (time_diff / 60))  # Decay over time
-    
-    # Weighted sum
-    priority = (urgency_score * 0.4) + (rating_score * 0.3) + (amount_score * 0.3)
-    return round(priority, 2)
+    # Return the raw bid amount as the priority score
+    return bid_amount
 
 # Auth Routes
 @api_router.post("/auth/register", response_model=Token)
